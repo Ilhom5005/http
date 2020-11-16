@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <form action="http://localhost:8080/banners.save" method="POST" enctype="multipart/form-data">   
+        <p>id</p>
+        <input type="number" name="id"><br>
+        <p>title</p>
+        <input type="text" name="title"><br>
+        <p>content</p>
+        <input type="text" name="content"><br>
+        <p>button</p>
+        <input type="text" name="button"><br>
+        <p>file(image)</p>
+        <input type="file" name="image"><br>
+        <button style="margin-left:20px;height: 30px;width:100px">Send</button>
+    </form>
+</body>
+</html>

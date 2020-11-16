@@ -1,37 +1,91 @@
 package main
 
 import (
-	"log"
 	"net"
+	"net/http"
 	"os"
-	"strconv"
 
-	"github.com/Ilhom5005/http/pkg/server"
+	"github.com/Ilhom5005/http/cmd/app"
+	"github.com/Ilhom5005/http/pkg/banners"
 )
 
 func main() {
 	host := "0.0.0.0"
 	port := "8080"
 
+	// file, err := os.Create("web/banners/1.")
+	// if err != nil {
+	// 	log.Println(err)
+	// 	return
+	// }
+	// file.Close()
 	if err := execute(host, port); err != nil {
 		os.Exit(1)
 	}
 }
 
-func execute(host string, port string) error {
-	srv := server.NewServer(net.JoinHostPort(host, port))
-	body := "hello"
-	srv.Register("/api/category{category}/{id}", func(req *server.Request) {
-		_, err := req.Conn.Write([]byte(
-			"HTTP/1.1 200 OK\r\n" +
-				"Content-Length: " + strconv.Itoa(len(body)) + "\r\n" +
-				"Content-Type: text/html\r\n" +
-				"Connection: close\r\n" +
-				"\r\n" + body,
-		))
-		if err != nil {
-			log.Print(err)
-		}
-	})
-	return srv.Start()
+// func execute(host string, port string) (err error) {
+// 	srv := &http.Server{
+// 		Addr: net.JoinHostPort(host, port),
+// 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 			if r.Method != "POST" {
+// 				return
+// 			}
+// 			log.Print("tags:", r.URL.Query().Get("tags"))
+// 			log.Println("full URL:", r.RequestURI)                        // full URL
+// 			log.Println("Method", r.Method)                               // method
+// 			log.Println("all Headers:\n", r.Header)                       // all headers
+// 			log.Println("specific header:", r.Header.Get("Content-Type")) // specific header
+// 			log.Println("FormValue(\"tags\"): ", r.FormValue("tags"))     // только первое значение Query + POST
+// 			log.Println("FormValue(\"tags\"): ", r.PostFormValue("tags")) // только первое значение POST
+
+// 			body, err := ioutil.ReadAll(r.Body)
+// 			if err != nil {
+// 				log.Println(err)
+// 			}
+// 			log.Printf("Body:\n%s", body)
+
+// 			err = r.ParseMultipartForm(10 * 1024 * 1024) // 10MB
+// 			if err != nil {
+// 				log.Println(err)
+// 			}
+
+// 			err = r.ParseForm()
+// 			if err != nil {
+// 				log.Println(err)
+// 			}
+// 			src, err := os.Create("1.png")
+// 			defer src.Close()
+
+// 			file, _, err := r.FormFile("image")
+// 			if err != nil {
+// 				log.Println(err)
+// 			}
+// 			defer file.Close()
+// 			io.Copy(src, file)
+
+// 			// can use only after ParseForm (or FormValue, PostFormValue)
+// 			log.Println("r.Form:", r.Form)         // all value of form(excepcion file)
+// 			log.Println("r.PostForm:", r.PostForm) // all value of form(excepcion file)
+
+// 			// can use olne after ParseMultipart(FormValue, PostFromValue, auto call ParseMultipart)
+// 			log.Println(r.FormFile("image"))
+// 			// r.MultipartForm.Value - only "обычные поля"
+// 			// r.MultipartForm.File - only files
+// 		}),
+// 	}
+// 	return srv.ListenAndServe()
+// }
+
+// i may repeat it :)
+func execute(host string, port string) (err error) {
+	mux := http.NewServeMux()
+	bannersSvc := banners.NewService()
+	server := app.NewServer(mux, bannersSvc)
+	srv := &http.Server{
+		Addr:    net.JoinHostPort(host, port),
+		Handler: server,
+	}
+	server.Init()
+	return srv.ListenAndServe()
 }
