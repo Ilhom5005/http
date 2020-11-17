@@ -10,22 +10,23 @@ import (
 	"github.com/Ilhom5005/http/pkg/banners"
 )
 
-// Server represent server of app
+//Server .. это наш логический сервер
 type Server struct {
-	mux        *http.ServeMux
-	bannersSvc *banners.Service
+	mux       *http.ServeMux
+	bannerSvc *banners.Service
 }
 
-// NewServer constructor function for making server
-func NewServer(mux *http.ServeMux, bannersSvc *banners.Service) *Server {
-	return &Server{mux: mux, bannersSvc: bannersSvc}
+//NewServer .. Функция для создание нового сервера
+func NewServer(m *http.ServeMux, bnrSvc *banners.Service) *Server {
+	return &Server{mux: m, bannerSvc: bnrSvc}
 }
 
+//ServeHTTP ... метод для запуска сервера
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
-// Init all handle functions
+//Init .. мотод для инициализации сервера
 func (s *Server) Init() {
 	s.mux.HandleFunc("/banners.getAll", s.handleGetAllBanners)
 	s.mux.HandleFunc("/banners.getById", s.handleGetBannerByID)
@@ -33,71 +34,89 @@ func (s *Server) Init() {
 	s.mux.HandleFunc("/banners.removeById", s.handleRemoveByID)
 }
 
-func (s *Server) handleGetAllBanners(w http.ResponseWriter, r *http.Request) {
-	items, err := s.bannersSvc.All(r.Context())
-	if err != nil {
-		log.Print(err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	}
-	s.write(w, items)
-}
-func (s *Server) write(w http.ResponseWriter, item []*banners.Banner) error {
-	data, err := json.Marshal(item)
-	if err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_, err = w.Write(data)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-func (s *Server) writeOne(w http.ResponseWriter, item *banners.Banner) error {
-	data, err := json.Marshal(item)
-	if err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_, err = w.Write(data)
-	if err != nil {
-		return err
-	}
-	return nil
-}
 func (s *Server) handleGetBannerByID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
+	//получаем ID из параметра запроса
+	idParam := r.URL.Query().Get("id")
 
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-	item, err := s.bannersSvc.ByID(r.Context(), id)
+	id, err := strconv.ParseInt(idParam, 10, 64)
+
 	if err != nil {
 		log.Print(err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		errorWriter(w, http.StatusBadRequest)
 		return
 	}
-	err = s.writeOne(w, item)
+
+	item, err := s.bannerSvc.ByID(r.Context(), id)
+	if err != nil {
+		//печатаем ошибку
+		log.Print(err)
+
+		errorWriter(w, http.StatusInternalServerError)
+		return
+	}
+
+	data, err := json.Marshal(item)
+
 	if err != nil {
 		log.Print(err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		errorWriter(w, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, err=w.Write(data)
+	if err!=nil {
+		log.Print(err)
 	}
 }
+
+func (s *Server) handleGetAllBanners(w http.ResponseWriter, r *http.Request) {
+	item, err := s.bannerSvc.All(r.Context())
+	if err != nil {
+		log.Print(err)
+
+		errorWriter(w, http.StatusInternalServerError)
+		return
+	}
+
+	data, err := json.Marshal(item)
+
+	if err != nil {
+		log.Print(err)
+		errorWriter(w, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, err=w.Write(data)
+	if err!=nil {
+		log.Print(err)
+	}
+}
+
 func (s *Server) handleSaveBanner(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PostFormValue("id")
+
+	//получаем данные из параметра запроса
+	idP := r.PostFormValue("id")
 	title := r.PostFormValue("title")
 	content := r.PostFormValue("content")
 	button := r.PostFormValue("button")
 	link := r.PostFormValue("link")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+
+	id, err := strconv.ParseInt(idP, 10, 64)
+
 	if err != nil {
-		log.Println(err)
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		log.Print(err)
+		errorWriter(w, http.StatusBadRequest)
 		return
 	}
+
+	if title == "" && content == "" && button == "" && link == "" {
+		log.Print(err)
+		errorWriter(w, http.StatusBadRequest)
+		return
+	}
+
 	item := &banners.Banner{
 		ID:      id,
 		Title:   title,
@@ -105,51 +124,70 @@ func (s *Server) handleSaveBanner(w http.ResponseWriter, r *http.Request) {
 		Button:  button,
 		Link:    link,
 	}
-	file, hfile, err := r.FormFile("image")
-	// file exist
+
+	file, fileHeader, err := r.FormFile("image")
+
 	if err == nil {
-		item.Image = getExp(hfile.Filename)
-	} else {
-		log.Println(err)
+		var name = strings.Split(fileHeader.Filename, ".")
+		item.Image=name[len(name)-1]
 	}
 
-	newItem, err := s.bannersSvc.Save(r.Context(), item, file)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	err = s.writeOne(w, newItem)
+	banner, err := s.bannerSvc.Save(r.Context(), item,file)
+
 	if err != nil {
 		log.Print(err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+
+		errorWriter(w, http.StatusInternalServerError)
 		return
 	}
+	data,err:=json.Marshal(banner)
+	if err != nil {
+		log.Print(err)
+
+		errorWriter(w, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, err=w.Write(data)
+	if err!=nil {
+		log.Print(err)
+	}
 }
+
 func (s *Server) handleRemoveByID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-	item, err := s.bannersSvc.RemoveByID(r.Context(), id)
+	idParam := r.URL.Query().Get("id")
+
+	id, err := strconv.ParseInt(idParam, 10, 64)
+
 	if err != nil {
 		log.Print(err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		errorWriter(w, http.StatusBadRequest)
 		return
 	}
-	err = s.writeOne(w, item)
+
+	banner, err := s.bannerSvc.RemoveByID(r.Context(), id)
+
 	if err != nil {
 		log.Print(err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		errorWriter(w, http.StatusInternalServerError)
 		return
+	}
+
+	data, err := json.Marshal(banner)
+
+	if err != nil {
+		log.Print(err)
+		errorWriter(w, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, err=w.Write(data)
+	if err!=nil {
+		log.Print(err)
 	}
 }
 
-// getExp get images expansion([ID, exp])
-func getExp(fileName string) string {
-	parts := strings.Split(fileName, ".")
-	return parts[len(parts)-1]
+//это функция для записывание ошибки в responseWriter или просто для ответа с ошиками
+func errorWriter(w http.ResponseWriter, httpSts int) {
+	http.Error(w, http.StatusText(httpSts), httpSts)
 }
